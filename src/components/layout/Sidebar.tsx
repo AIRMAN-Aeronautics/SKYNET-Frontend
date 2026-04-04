@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
-  LayoutDashboard, Plane, CalendarDays, Wrench,
+  LayoutDashboard, Plane, PlaneTakeoff, CalendarDays, Wrench,
   ShieldCheck, DollarSign, Users, LifeBuoy,
   GraduationCap, BarChart3, Settings, UserSquare2, BookUser,
 } from 'lucide-react';
@@ -17,6 +17,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { to: '/dashboard',    label: 'Dashboard',    icon: LayoutDashboard,  permission: 'dashboard:read' },
   { to: '/dispatch',     label: 'Dispatch',     icon: Plane,            permission: 'dispatch:read' },
+  { to: '/aircraft-availability', label: 'Aircraft Availability', icon: PlaneTakeoff, permission: 'aircraft_availability:read' },
   { to: '/roster',       label: 'Roster',       icon: CalendarDays,     permission: 'roster:read' },
   { to: '/students',     label: 'Students',     icon: BookUser,         permission: 'students:read' },
   { to: '/instructors',  label: 'Instructors',  icon: UserSquare2,      permission: 'instructors:read' },

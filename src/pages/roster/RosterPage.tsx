@@ -6,38 +6,26 @@ import {
   startOfMonth, endOfMonth,
   eachDayOfInterval, endOfWeek
 } from 'date-fns';
-
+import 'react-datepicker/dist/react-datepicker.css';
 import {
-  ChevronLeft, ChevronRight, RefreshCw, Zap,
-  X, Clock, User, Plane, Calendar, LayoutGrid
+  RefreshCw, X, Clock, Plane, Calendar
 } from 'lucide-react';
 
 import {
-  getRoster, getRosterSlot, generateRoster,
+  getRoster, getRosterSlot, recomputeRoster,
   type RosterSlot, type SlotStatus, type RosterSlotDetail,
 } from '@/lib/api/roster';
 
-
-import { recomputeRoster } from '@/lib/api/roster';
-// ─────────────────────────────
 // 🎨 STATUS STYLE
-// ─────────────────────────────
-
 const STATUS_STYLE: Record<SlotStatus, string> = {
-  SCHEDULED: 'bg-sky-500/10 border-sky-400 text-sky-300',
-  PENDING_DISPATCH: 'bg-amber-500/10 border-amber-400 text-amber-300',
-  COMPLETED: 'bg-emerald-500/10 border-emerald-400 text-emerald-300',
-  CANCELLED: 'bg-gray-500/10 border-gray-400 text-gray-400 line-through',
-  WX_CANCELLED: 'bg-slate-500/10 border-slate-400 text-slate-400 line-through',
+  SCHEDULED: 'bg-blue-50 border-blue-200 text-blue-700',
+  PENDING_DISPATCH: 'bg-amber-50 border-amber-200 text-amber-700',
+  COMPLETED: 'bg-green-50 border-green-200 text-green-700',
+  CANCELLED: 'bg-gray-100 border-gray-200 text-gray-400 line-through',
+  WX_CANCELLED: 'bg-gray-100 border-gray-200 text-gray-400 line-through',
 };
 
-const SLOT_LABELS = ['SLOT_1', 'SLOT_2', 'SLOT_3'] as const;
-
-// ─────────────────────────────
 // 🧠 HELPERS
-// ─────────────────────────────
-
-
 function isoDate(d: Date) {
   return format(d, 'yyyy-MM-dd');
 }
@@ -58,26 +46,23 @@ function groupSlots(slots: RosterSlot[]) {
   return map;
 }
 
-// ─────────────────────────────
 // ✨ SLOT CARD
-// ─────────────────────────────
-
 function SlotCard({ slot, onClick, compact = false }: any) {
   return (
     <button
       onClick={() => onClick(slot.id)}
-      className={`w-full text-left rounded-xl border px-3 py-2 text-xs backdrop-blur-md transition-all
-      hover:scale-[1.02] hover:shadow-lg ${STATUS_STYLE[slot.status]}`}
+      className={`w-full text-left rounded-lg border px-3 py-2 text-xs bg-white shadow-sm hover:shadow-md transition ${STATUS_STYLE[slot.status]}`}
     >
-      <div className="font-semibold truncate text-white">
+      <div className="font-semibold truncate">
         {slot.cadetName ?? 'Unassigned'}
       </div>
+
       {!compact && (
         <>
-          <div className="text-[10px] opacity-70 truncate">
+          <div className="text-[11px] text-gray-500 truncate">
             {slot.instructorName ?? 'No instructor'}
           </div>
-          <div className="text-[10px] opacity-60 truncate">
+          <div className="text-[11px] text-gray-400 truncate">
             {slot.aircraftCode ?? 'No aircraft'}
           </div>
         </>
@@ -86,85 +71,37 @@ function SlotCard({ slot, onClick, compact = false }: any) {
   );
 }
 
-// ─────────────────────────────
 // 📅 WEEK VIEW
-// ─────────────────────────────
-
 function WeekView({ days, grouped, onSlotClick }: any) {
   return (
-    <div className="grid grid-cols-8 gap-3">
-      <div className="space-y-6 pt-10">
-        {SLOT_LABELS.map((s) => (
-          <div key={s} className="text-xs text-gray-400">
-            {s.replace('_', ' ')}
-          </div>
-        ))}
-      </div>
-
-      {days.map((d) => {
-        const dateKey = isoDate(d);
-
-        return (
-          <div key={dateKey} className="space-y-3">
-            <div className="text-center">
-              <div className="text-xs text-gray-400">{format(d, 'EEE')}</div>
-              <div className="text-lg font-bold text-white">{format(d, 'd')}</div>
-            </div>
-
-            {SLOT_LABELS.map((slotLabel) => {
-              const slots = grouped.get(dateKey)?.get(slotLabel) ?? [];
-
-              return (
-                <div key={slotLabel} className="rounded-xl bg-white/5 border border-white/10 p-2 space-y-1 min-h-[70px]">
-                  {slots.length === 0 ? (
-                    <div className="h-8 border border-dashed border-white/10 rounded" />
-                  ) : (
-                    slots.map((s: any) => (
-                      <SlotCard key={s.id} slot={s} onClick={onSlotClick} />
-                    ))
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─────────────────────────────
-// 📆 MONTH VIEW (UPGRADED)
-// ─────────────────────────────
-
-function MonthView({ anchor, grouped, onSlotClick }: any) {
-  const start = startOfMonth(anchor);
-  const end = endOfMonth(anchor);
-  const days = eachDayOfInterval({
-    start: startOfWeek(start, { weekStartsOn: 1 }),
-    end: endOfWeek(end, { weekStartsOn: 1 }),
-  });
-
-  return (
-    <div className="grid grid-cols-7 gap-2">
+    <div className="grid grid-cols-7 gap-3">
       {days.map((d) => {
         const dateKey = isoDate(d);
         const dayMap = grouped.get(dateKey);
         const slots = dayMap ? Array.from(dayMap.values()).flat() : [];
 
         return (
-          <div key={dateKey} className="bg-white/5 border border-white/10 rounded-xl p-2 min-h-[100px]">
-            <div className="text-xs text-gray-400 mb-1">
-              {format(d, 'd')}
+          <div key={dateKey} className="space-y-2">
+
+            <div className="text-center">
+              <div className="text-xs text-gray-500 uppercase">
+                {format(d, 'EEE')}
+              </div>
+              <div className="text-lg font-semibold">
+                {format(d, 'd')}
+              </div>
             </div>
 
-            <div className="space-y-1">
-              {slots.slice(0, 3).map((s: any) => (
-                <SlotCard key={s.id} slot={s} onClick={onSlotClick} compact />
-              ))}
-              {slots.length > 3 && (
-                <div className="text-xs text-gray-500">
-                  +{slots.length - 3} more
+            <div className="bg-white border-2 border-gray-300 rounded-lg p-2 min-h-[220px] hover:border-blue-400 hover:shadow-md transition">
+              <div className="h-1 w-full bg-gradient-to-r from-blue-500 via-sky-400 to-blue-500 rounded mb-2 opacity-70" />
+
+              {slots.length === 0 ? (
+                <div className="h-20 border border-dashed border-gray-300 rounded" />
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {slots.map((s: any) => (
+                    <SlotCard key={s.id} slot={s} onClick={onSlotClick} />
+                  ))}
                 </div>
               )}
             </div>
@@ -175,10 +112,44 @@ function MonthView({ anchor, grouped, onSlotClick }: any) {
   );
 }
 
-// ─────────────────────────────
-// 🪟 MODAL → RIGHT PANEL (TEAMS STYLE)
-// ─────────────────────────────
+// 📆 MONTH VIEW
+function MonthView({ anchor, grouped, onSlotClick }: any) {
+  const start = startOfMonth(anchor);
+  const end = endOfMonth(anchor);
 
+  const days = eachDayOfInterval({
+    start: startOfWeek(start, { weekStartsOn: 1 }),
+    end: endOfWeek(end, { weekStartsOn: 1 }),
+  });
+
+  return (
+    <div className="grid grid-cols-7 gap-3">
+      {days.map((d) => {
+        const dateKey = isoDate(d);
+        const dayMap = grouped.get(dateKey);
+        const slots = dayMap ? Array.from(dayMap.values()).flat() : [];
+
+        return (
+          <div key={dateKey} className="bg-white border-2 border-gray-300 rounded-lg p-2 min-h-[120px] hover:border-blue-400 hover:shadow-md transition">
+            <div className="h-1 w-full bg-gradient-to-r from-blue-500 via-sky-400 to-blue-500 rounded mb-1 opacity-70" />
+
+            <div className="text-xs text-gray-500 mb-1 font-medium">
+              {format(d, 'd')}
+            </div>
+
+            <div className="space-y-1">
+              {slots.slice(0, 3).map((s: any) => (
+                <SlotCard key={s.id} slot={s} onClick={onSlotClick} compact />
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// 🪟 SIDE PANEL
 function SlotDetailModal({ slotId, onClose }: any) {
   const { data, isLoading } = useQuery<RosterSlotDetail>({
     queryKey: ['roster-slot', slotId],
@@ -186,56 +157,21 @@ function SlotDetailModal({ slotId, onClose }: any) {
   });
 
   return (
-     <div
-    className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm"
-    onClick={onClose}   // ✅ ADD THIS
-  >
-
-      <div className="w-[420px] h-full bg-[#0B1220] border-l border-white/10 shadow-2xl p-6 overflow-y-auto text-white">
-
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center gap-2">
-            <Plane className="text-sky-400" />
-            <span className="font-semibold">Flight Detail</span>
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={onClose}>
+      <div className="w-[420px] h-full bg-white border-l shadow-xl p-6 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between mb-6">
+          <div className="flex gap-2 font-semibold">
+            <Plane /> Flight Detail
           </div>
           <button onClick={onClose}><X /></button>
         </div>
 
-        {isLoading ? (
-          <RefreshCw className="animate-spin" />
-        ) : (
-          <div className="space-y-6 text-sm">
-
-            {/* Time */}
-            <div className="bg-white/5 p-3 rounded-xl border border-white/10">
-              <div className="flex gap-2 items-center">
-                <Calendar size={14} />
-                {format(new Date(data.flightDate), 'dd MMM yyyy')}
-              </div>
-              <div className="flex gap-2 items-center mt-2">
-                <Clock size={14} />
-                {data.flightSlotDisplay}
-              </div>
+        {isLoading ? <RefreshCw className="animate-spin" /> : (
+          <div className="space-y-4 text-sm">
+            <div className="bg-gray-50 p-3 rounded border">
+              <Calendar size={14} /> {format(new Date(data.flightDate), 'dd MMM yyyy')}
+              <div className="mt-2"><Clock size={14} /> {data.flightSlotDisplay}</div>
             </div>
-
-            {/* Cadet */}
-            <div className="bg-white/5 p-3 rounded-xl border border-white/10">
-              <div className="text-xs text-gray-400 mb-1">Cadet</div>
-              <div className="font-semibold">{data.cadet.fullName}</div>
-            </div>
-
-            {/* Instructor */}
-            <div className="bg-white/5 p-3 rounded-xl border border-white/10">
-              <div className="text-xs text-gray-400 mb-1">Instructor</div>
-              <div className="font-semibold">{data.instructor.fullName}</div>
-            </div>
-
-            {/* Aircraft */}
-            <div className="bg-white/5 p-3 rounded-xl border border-white/10">
-              <div className="text-xs text-gray-400 mb-1">Aircraft</div>
-              <div className="font-semibold">{data.aircraft.registration}</div>
-            </div>
-
           </div>
         )}
       </div>
@@ -243,48 +179,222 @@ function SlotDetailModal({ slotId, onClose }: any) {
   );
 }
 
-// ─────────────────────────────
-// 🚀 MAIN PAGE
-// ─────────────────────────────
+// 🧭 HEADER (ZOHO STYLE)
+import DatePicker from 'react-datepicker';
 
+
+function RosterHeader({
+  anchor,
+  setAnchor,
+  view,
+  setView,
+  goBack,
+  goForward,
+  recomputeMutation,
+}: any) {
+
+  const [open, setOpen] = useState(false);
+
+  const start = startOfWeek(anchor, { weekStartsOn: 1 });
+  const end = addDays(start, 6);
+
+  const label =
+    view === 'week'
+      ? `${format(start, 'dd MMM yyyy')} - ${format(end, 'dd MMM yyyy')}`
+      : format(anchor, 'MMMM yyyy');
+
+  return (
+    <div className="px-6 py-4 bg-gradient-to-r from-blue-900 via-blue-800 to-slate-900 text-white border-b shadow-lg">
+
+      <div className="flex items-center justify-between">
+
+        {/* ✈️ LEFT (Brand) */}
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-white/10 rounded-lg backdrop-blur">
+            <Plane className="text-sky-300" size={20} />
+          </div>
+
+          <div>
+            <div className="font-semibold text-lg tracking-wide">
+              Flight Operations
+            </div>
+            <div className="text-xs text-blue-200">
+              Training & Scheduling Console
+            </div>
+          </div>
+        </div>
+
+        {/* 📅 CENTER NAV */}
+        <div className="flex flex-col items-center relative">
+
+          <div className="flex items-center gap-3 mb-1">
+
+            <button
+              onClick={goBack}
+              className="p-2 rounded-md bg-white/10 hover:bg-white/20 transition"
+            >
+              ←
+            </button>
+
+            {/* CLICKABLE DATE */}
+            <div
+              onClick={() => setOpen(!open)}
+              className="cursor-pointer font-semibold text-sm tracking-wide hover:text-sky-300"
+            >
+              {label}
+            </div>
+
+            <button
+              onClick={goForward}
+              className="p-2 rounded-md bg-white/10 hover:bg-white/20 transition"
+            >
+              →
+            </button>
+
+          </div>
+
+          {/* DATE PICKER */}
+          {open && (
+            <div className="absolute top-12 z-50 bg-white text-black rounded shadow-lg">
+              <DatePicker
+                inline
+                selected={anchor}
+                onChange={(date: Date) => {
+                  setAnchor(date);
+                  setOpen(false);
+                }}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* ⚙️ RIGHT CONTROLS */}
+        <div className="flex items-center gap-2">
+
+          {/* TODAY */}
+          <button
+            onClick={() => setAnchor(new Date())}
+            className="px-3 py-1.5 text-sm rounded-md bg-white/10 hover:bg-white/20 transition"
+          >
+            Today
+          </button>
+
+          {/* VIEW SWITCH */}
+          <div className="flex border border-white/20 rounded-md overflow-hidden">
+
+            <button
+              onClick={() => setView('list')}
+              className={`px-3 py-1 text-sm ${
+                view === 'list'
+                  ? 'bg-white text-blue-900'
+                  : 'bg-transparent hover:bg-white/10'
+              }`}
+            >
+              List
+            </button>
+
+            <button
+              onClick={() => setView('week')}
+              className={`px-3 py-1 text-sm ${
+                view === 'week'
+                  ? 'bg-white text-blue-900'
+                  : 'bg-transparent hover:bg-white/10'
+              }`}
+            >
+              Week
+            </button>
+
+            <button
+              onClick={() => setView('month')}
+              className={`px-3 py-1 text-sm ${
+                view === 'month'
+                  ? 'bg-white text-blue-900'
+                  : 'bg-transparent hover:bg-white/10'
+              }`}
+            >
+              Month
+            </button>
+
+          </div>
+
+          {/* RECOMPUTE */}
+          <button
+            onClick={() => recomputeMutation.mutate()}
+            className="ml-2 bg-amber-400 hover:bg-amber-300 text-black px-3 py-1.5 rounded-md text-sm flex items-center gap-1 shadow"
+          >
+            <RefreshCw
+              className={`w-4 h-4 ${
+                recomputeMutation.isPending ? 'animate-spin' : ''
+              }`}
+            />
+            Recompute
+          </button>
+
+        </div>
+      </div>
+    </div>
+  );
+}
+//List VIEW
+function ListView({ grouped, onSlotClick }: any) {
+  const allSlots = Array.from(grouped.values())
+    .flatMap((m) => Array.from(m.values()).flat());
+
+  return (
+    <div className="bg-white border rounded-lg p-4 space-y-2">
+      {allSlots.length === 0 ? (
+        <div className="text-gray-400">No schedules</div>
+      ) : (
+        allSlots.map((s: any) => (
+          <div
+            key={s.id}
+            onClick={() => onSlotClick(s.id)}
+            className="p-3 border rounded-md hover:bg-gray-50 cursor-pointer"
+          >
+            <div className="font-semibold">{s.cadetName}</div>
+            <div className="text-xs text-gray-500">
+              {s.flightDate} • {s.flightSlot}
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+// 🚀 MAIN
 export default function RosterPage() {
-    const recomputeMutation = useMutation({
-  mutationFn: recomputeRoster,
-  onSuccess: () => qc.invalidateQueries({ queryKey: ['roster'] }),
-});
   const qc = useQueryClient();
-  const today = new Date();
-
-  const [anchor, setAnchor] = useState(today);
-  const [view, setView] = useState<'week' | 'month'>('week');
+  const [anchor, setAnchor] = useState(new Date());
+  //const [view, setView] = useState<'week' | 'month'>('week');
+  const [view, setView] = useState<'list' | 'week' | 'month'>('week');
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
 
+  const recomputeMutation = useMutation({
+    mutationFn: recomputeRoster,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['roster'] }),
+  });
+
+  function goBack() {
+    setAnchor(prev => view==='week'?subWeeks(prev,1):addMonths(prev,-1));
+  }
+
+  function goForward() {
+    setAnchor(prev => view==='week'?addWeeks(prev,1):addMonths(prev,1));
+  }
+
   const { fromDate, toDate } = useMemo(() => {
-  if (view === 'week') {
-    const start = startOfWeek(anchor, { weekStartsOn: 1 });
-    return {
-      fromDate: isoDate(start),
-      toDate: isoDate(addDays(start, 6)),
-    };
-  } else {
+    if (view === 'week') {
+      const start = startOfWeek(anchor, { weekStartsOn: 1 });
+      return { fromDate: isoDate(start), toDate: isoDate(addDays(start, 6)) };
+    }
     const start = startOfMonth(anchor);
     const end = endOfMonth(anchor);
-
     return {
       fromDate: isoDate(startOfWeek(start, { weekStartsOn: 1 })),
       toDate: isoDate(endOfWeek(end, { weekStartsOn: 1 })),
     };
-  }
-}, [anchor, view]);
-
-function goBack() {
-  setAnchor((a) => view === 'week' ? subWeeks(a, 1) : addMonths(a, -1));
-}
-
-function goForward() {
-  setAnchor((a) => view === 'week' ? addWeeks(a, 1) : addMonths(a, 1));
-}
-
+  }, [anchor, view]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['roster', fromDate, toDate],
@@ -294,51 +404,25 @@ function goForward() {
   const grouped = useMemo(() => groupSlots(data?.slots ?? []), [data]);
 
   return (
-    <div className="h-full flex flex-col bg-[#0B1220] text-white">
+    <div className="h-full flex flex-col bg-gray-50">
 
-      {/* HEADER */}
-      <div className="px-6 py-4 border-b border-white/10 flex justify-between">
-        <div className="flex items-center gap-2">
-          <Plane className="text-sky-400" />
-          <span className="font-bold">Flight Ops</span>
-        </div>
+     <RosterHeader
+  anchor={anchor}
+  setAnchor={setAnchor}
+  view={view}
+  setView={setView}
+  goBack={goBack}
+  goForward={goForward}
+  recomputeMutation={recomputeMutation}
+/>
 
-        <div className="flex gap-2">
-          <button onClick={() => setView('week')} className="text-xs">Week</button>
-          <button onClick={() => setView('month')} className="text-xs">Month</button>
-        </div>
-         {/* Recompute */}
-  <button
-    onClick={() => recomputeMutation.mutate()}
-    className="border border-white/20 hover:bg-white/10 px-3 py-2 rounded-lg text-sm flex items-center gap-1"
-  >
-    <RefreshCw className={`w-4 h-4 ${recomputeMutation.isPending ? 'animate-spin' : ''}`} />
-    {recomputeMutation.isPending ? 'Recomputing…' : 'Recompute'}
-  </button>
-      </div>
-
-      {/* NAV */}
-      <div className="flex justify-between px-6 py-3 border-b border-white/10">
-        <div className="flex gap-2">
-         <button onClick={goBack}><ChevronLeft /></button>
-        <button onClick={goForward}><ChevronRight /></button>
-        </div>
-
-        <div>{format(anchor, 'dd MMM yyyy')}</div>
-      </div>
-
-      {/* BODY */}
       <div className="flex-1 p-6 overflow-auto">
-        {isLoading ? (
-          <RefreshCw className="animate-spin" />
-        ) : view === 'week' ? (
-          <WeekView days={weekDays(anchor)} grouped={grouped} onSlotClick={setSelectedSlotId} />
-        ) : (
-          <MonthView anchor={anchor} grouped={grouped} onSlotClick={setSelectedSlotId} />
-        )}
+        {isLoading ? <RefreshCw className="animate-spin" /> :
+          view === 'week'
+            ? <WeekView days={weekDays(anchor)} grouped={grouped} onSlotClick={setSelectedSlotId} />
+            : <MonthView anchor={anchor} grouped={grouped} onSlotClick={setSelectedSlotId} />
+        }
       </div>
-
-      {/* MODAL */}
 
       {selectedSlotId && (
         <SlotDetailModal
