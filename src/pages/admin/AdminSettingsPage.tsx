@@ -24,12 +24,14 @@ import { Separator } from '../../components/ui/separator';
 
 import {
   getTenant, updateTenant,
+  getSettings, updateSettings,
   getUsers, inviteUser, activateUser, deactivateUser, assignRoles,
   getRoles, getRole, createRole, updateRolePermissions, deleteRole, getPermissions,
   getStudents, createStudent, bulkCreateStudents, activateStudent, deactivateStudent,
   getInstructors, createInstructor, activateInstructor, deactivateInstructor,
   getMapping, saveMapping,
   type AdminUser, type Role, type TenantInfo, type StudentRecord, type InstructorRecord,
+  type TenantSettings,
 } from '../../lib/api/admin';
 
 // ── Shared design-system components ──────────────────────────────────────────
@@ -808,25 +810,65 @@ function RolesTab() {
 
 // ── System Tab ────────────────────────────────────────────────────────────────
 
+function IntegerField({
+  label, desc, value, onChange, disabled,
+}: {
+  label: string; desc: string;
+  value: number; onChange: (v: number) => void; disabled: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between px-4 py-3">
+      <div className="flex-1 min-w-0 pr-4">
+        <p className="text-sm font-medium">{label}</p>
+        <p className="text-xs text-muted-foreground">{desc}</p>
+      </div>
+      <Input
+        type="number"
+        min={1}
+        value={value}
+        onChange={e => {
+          const n = parseInt(e.target.value, 10);
+          if (!isNaN(n) && n >= 1) onChange(n);
+        }}
+        disabled={disabled}
+        className="w-20 h-7 text-xs text-right"
+      />
+    </div>
+  );
+}
+
 function SystemTab() {
   const qc = useQueryClient();
 
-  const { data: tenant, isLoading } = useQuery({
-    queryKey: ['admin-tenant'],
-    queryFn: getTenant,
+  const { data: settings, isLoading } = useQuery<TenantSettings>({
+    queryKey: ['admin-settings'],
+    queryFn: getSettings,
   });
 
-  const notifs = (tenant?.settings?.notifications ?? {}) as Record<string, boolean>;
+  // ── System settings state ─────────────────────────────────────────────────
+  const [studentsPerInstructor, setStudentsPerInstructor] = useState(10);
+  const [soloMilestoneHours, setSoloMilestoneHours] = useState(25);
+  const [instructorHoursPerDay, setInstructorHoursPerDay] = useState(6);
+
+  // ── Notification preferences state ────────────────────────────────────────
   const [emailNotifs, setEmailNotifs] = useState(true);
   const [maintenanceAlerts, setMaintenanceAlerts] = useState(true);
   const [complianceWarnings, setComplianceWarnings] = useState(true);
+
+  // ── Data management state ─────────────────────────────────────────────────
+  const [autoBackup, setAutoBackup] = useState(false);
+
   const [synced, setSynced] = useState(false);
 
-  // Sync local state once tenant data arrives
-  if (tenant && !synced) {
-    setEmailNotifs(notifs.emailNotifications ?? true);
-    setMaintenanceAlerts(notifs.maintenanceAlerts ?? true);
-    setComplianceWarnings(notifs.complianceWarnings ?? true);
+  // Sync local state once API data arrives (runs once per fetch)
+  if (settings && !synced) {
+    setStudentsPerInstructor(settings.system_settings.student_per_instructor);
+    setSoloMilestoneHours(settings.system_settings.solo_flight_milestone_hours);
+    setInstructorHoursPerDay(settings.system_settings.instructor_flying_hours_per_day);
+    setEmailNotifs(settings.notification_preferences.emailNotifications);
+    setMaintenanceAlerts(settings.notification_preferences.maintenanceAlerts);
+    setComplianceWarnings(settings.notification_preferences.complianceWarnings);
+    setAutoBackup(settings.data_management.autoBackup);
     setSynced(true);
   }
 
@@ -834,28 +876,36 @@ function SystemTab() {
 
   const saveMutation = useMutation({
     mutationFn: () =>
-      updateTenant({
-        settings: {
-          notifications: {
-            emailNotifications: emailNotifs,
-            maintenanceAlerts,
-            complianceWarnings,
-          },
+      updateSettings({
+        system_settings: {
+          student_per_instructor: studentsPerInstructor,
+          solo_flight_milestone_hours: soloMilestoneHours,
+          instructor_flying_hours_per_day: instructorHoursPerDay,
+        },
+        notification_preferences: {
+          emailNotifications: emailNotifs,
+          maintenanceAlerts,
+          complianceWarnings,
+        },
+        data_management: {
+          autoBackup,
         },
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin-tenant'] });
+      qc.invalidateQueries({ queryKey: ['admin-settings'] });
       setSaved_(true);
       setTimeout(() => setSaved_(false), 2000);
     },
   });
+
+  const busy = isLoading || saveMutation.isPending;
 
   return (
     <div className="space-y-4">
       <AviationHeader
         category="Configuration"
         title="System Settings"
-        description="Notification preferences and data management for your organisation"
+        description="Operational thresholds, notification preferences, and data management"
         actions={
           <div className="flex items-center gap-2">
             {saved_ && (
@@ -867,7 +917,7 @@ function SystemTab() {
               size="sm"
               className="text-xs bg-blue-500 hover:bg-blue-400 text-white"
               onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending || isLoading}
+              disabled={busy}
             >
               {saveMutation.isPending ? 'Saving…' : 'Save Settings'}
             </Button>
@@ -875,42 +925,83 @@ function SystemTab() {
         }
       />
 
+      {/* ── Configuration System Settings ─────────────────────────────────── */}
+      <div className="rounded-lg border overflow-hidden">
+        <div className="bg-muted/40 px-4 py-2 border-b">
+          <SectionLabel>Configuration System Settings</SectionLabel>
+        </div>
+        <div className="divide-y">
+          <IntegerField
+            label="Students per Instructor"
+            desc="Maximum number of students that can be assigned to one instructor"
+            value={studentsPerInstructor}
+            onChange={setStudentsPerInstructor}
+            disabled={busy}
+          />
+          <IntegerField
+            label="Solo Flight Milestone (hours)"
+            desc="Minimum flight hours a student must log before solo flight is permitted"
+            value={soloMilestoneHours}
+            onChange={setSoloMilestoneHours}
+            disabled={busy}
+          />
+          <IntegerField
+            label="Instructor Flying Hours per Day"
+            desc="Maximum flying hours an instructor is scheduled for in a single day"
+            value={instructorHoursPerDay}
+            onChange={setInstructorHoursPerDay}
+            disabled={busy}
+          />
+        </div>
+      </div>
+
+      {/* ── Notification Preferences ──────────────────────────────────────── */}
       <div className="rounded-lg border overflow-hidden">
         <div className="bg-muted/40 px-4 py-2 border-b">
           <SectionLabel>Notification Preferences</SectionLabel>
         </div>
         {[
-          { label: 'Email Notifications', desc: 'Send email alerts for critical events', checked: emailNotifs, onChange: setEmailNotifs },
-          { label: 'Maintenance Alerts',  desc: 'Alert when aircraft require maintenance', checked: maintenanceAlerts, onChange: setMaintenanceAlerts },
-          { label: 'Compliance Warnings', desc: 'Warn 30 days before compliance items expire', checked: complianceWarnings, onChange: setComplianceWarnings },
+          { label: 'Email Notifications', desc: 'Send email alerts for critical events',          checked: emailNotifs,        onChange: setEmailNotifs        },
+          { label: 'Maintenance Alerts',  desc: 'Alert when aircraft require maintenance',         checked: maintenanceAlerts,  onChange: setMaintenanceAlerts  },
+          { label: 'Compliance Warnings', desc: 'Warn 30 days before compliance items expire',    checked: complianceWarnings, onChange: setComplianceWarnings },
         ].map((row, i, arr) => (
           <div key={row.label} className={`flex items-center justify-between px-4 py-3 ${i < arr.length - 1 ? 'border-b' : ''}`}>
             <div>
               <p className="text-sm font-medium">{row.label}</p>
               <p className="text-xs text-muted-foreground">{row.desc}</p>
             </div>
-            <Switch checked={row.checked} onCheckedChange={row.onChange} disabled={isLoading} />
+            <Switch checked={row.checked} onCheckedChange={row.onChange} disabled={busy} />
           </div>
         ))}
       </div>
 
+      {/* ── Data Management ───────────────────────────────────────────────── */}
       <div className="rounded-lg border overflow-hidden">
         <div className="bg-muted/40 px-4 py-2 border-b">
-          <SectionLabel>API & Data</SectionLabel>
+          <SectionLabel>Data Management</SectionLabel>
         </div>
         <div className="divide-y">
-          {[
-            { label: 'API Access',   desc: 'Generate API keys for external integrations', action: 'Generate API Key' },
-            { label: 'Data Export',  desc: "Export your organisation's data as CSV or JSON",  action: 'Export Data'      },
-          ].map(row => (
-            <div key={row.label} className="flex items-center justify-between px-4 py-3">
-              <div>
-                <p className="text-sm font-medium">{row.label}</p>
-                <p className="text-xs text-muted-foreground">{row.desc}</p>
-              </div>
-              <Button variant="outline" size="sm" className="h-7 text-xs">{row.action}</Button>
+          <div className="flex items-center justify-between px-4 py-3">
+            <div>
+              <p className="text-sm font-medium">Automatic Backup</p>
+              <p className="text-xs text-muted-foreground">Automatically back up organisation data daily</p>
             </div>
-          ))}
+            <Switch checked={autoBackup} onCheckedChange={setAutoBackup} disabled={busy} />
+          </div>
+          <div className="flex items-center justify-between px-4 py-3">
+            <div>
+              <p className="text-sm font-medium">Data Export</p>
+              <p className="text-xs text-muted-foreground">Export your organisation's data as CSV or JSON</p>
+            </div>
+            <Button variant="outline" size="sm" className="h-7 text-xs">Export Data</Button>
+          </div>
+          <div className="flex items-center justify-between px-4 py-3">
+            <div>
+              <p className="text-sm font-medium">API Access</p>
+              <p className="text-xs text-muted-foreground">Generate API keys for external integrations</p>
+            </div>
+            <Button variant="outline" size="sm" className="h-7 text-xs">Generate API Key</Button>
+          </div>
         </div>
       </div>
     </div>

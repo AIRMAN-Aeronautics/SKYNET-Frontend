@@ -243,3 +243,42 @@ export const saveMapping = async (mappings: Record<string, string>) => {
   const { data } = await apiClient.put('/admin/mapping', { mappings });
   return data;
 };
+
+// ── Tenant Settings ───────────────────────────────────────────────────────────
+
+export interface SystemSettings {
+  student_per_instructor: number;
+  solo_flight_milestone_hours: number;
+  instructor_flying_hours_per_day: number;
+}
+
+export interface NotificationPreferences {
+  emailNotifications: boolean;
+  maintenanceAlerts: boolean;
+  complianceWarnings: boolean;
+}
+
+export interface DataManagement {
+  autoBackup: boolean;
+  retentionDays: number;
+}
+
+export interface TenantSettings {
+  system_settings: SystemSettings;
+  notification_preferences: NotificationPreferences;
+  data_management: DataManagement;
+}
+
+export const getSettings = async (): Promise<TenantSettings> => {
+  const { data } = await apiClient.get('/admin/settings');
+  return data as TenantSettings;
+};
+
+export const updateSettings = async (body: {
+  system_settings?: Partial<SystemSettings>;
+  notification_preferences?: Partial<NotificationPreferences>;
+  data_management?: Partial<DataManagement>;
+}) => {
+  const { data } = await apiClient.patch('/admin/settings', body);
+  return data as TenantSettings;
+};
