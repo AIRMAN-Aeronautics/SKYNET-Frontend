@@ -10,6 +10,7 @@ import LoginPage from './pages/auth/LoginPage';
 // Core pages
 import DashboardPage from './pages/dashboard/DashboardPage';
 import DispatchPage from './pages/dispatch/DispatchPage';
+import AircraftPage from './pages/aircraft/AircraftPage';
 import AircraftAvailabilityPage from './pages/aircraft-availability/AircraftAvailabilityPage';
 import RosterPage from './pages/roster/RosterPage';
 import FleetPage from './pages/fleet/FleetPage';
@@ -55,6 +56,11 @@ export default function App() {
             {/* Dispatch */}
             <Route element={<PermissionRoute permission="dispatch:read" />}>
               <Route path="dispatch/*" element={<DispatchPage />} />
+            </Route>
+
+            {/* Aircraft Management */}
+            <Route element={<PermissionRoute permission="fleet:read" />}>
+              <Route path="aircraft" element={<AircraftPage />} />
             </Route>
 
             {/* Aircraft Availability */}

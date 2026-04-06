@@ -49,13 +49,13 @@ function StatusBadge({ status }: { status: AvailStatus }) {
 
 // ── Form Modal ────────────────────────────────────────────────────────────────
 
-interface Aircraft { id: string; registration: string; type?: string; model?: string; }
+interface Aircraft { id: number; registration: string; type?: string; model?: string; }
 
 interface FormModalProps {
   aircraft: Aircraft[];
   initial?: AircraftAvailabilityRecord | null;
   onSave:  (data: {
-    aircraft_id: string; avail_date: string;
+    aircraft_id: number; avail_date: string;
     time_slot: TimeSlot; status: AvailStatus; remarks: string;
   }) => void;
   onClose: () => void;
@@ -63,7 +63,7 @@ interface FormModalProps {
 }
 
 function FormModal({ aircraft, initial, onSave, onClose, saving }: FormModalProps) {
-  const [aircraftId, setAircraftId] = useState(initial?.aircraftId ?? '');
+  const [aircraftId, setAircraftId] = useState<number | ''>(initial?.aircraftId ?? '');
   const [availDate,  setAvailDate]  = useState(initial?.availDate  ?? isoDate(new Date()));
   const [timeSlot,   setTimeSlot]   = useState<TimeSlot>(initial?.timeSlot ?? 'ALL');
   const [status,     setStatus]     = useState<AvailStatus>(initial?.status ?? 'AVAILABLE');
@@ -74,7 +74,7 @@ function FormModal({ aircraft, initial, onSave, onClose, saving }: FormModalProp
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!aircraftId) return;
-    onSave({ aircraft_id: aircraftId, avail_date: availDate, time_slot: timeSlot, status, remarks });
+    onSave({ aircraft_id: aircraftId as number, avail_date: availDate, time_slot: timeSlot, status, remarks });
   }
 
   return (
@@ -97,7 +97,7 @@ function FormModal({ aircraft, initial, onSave, onClose, saving }: FormModalProp
               <select
                 required
                 value={aircraftId}
-                onChange={e => setAircraftId(e.target.value)}
+                onChange={e => setAircraftId(e.target.value ? parseInt(e.target.value, 10) : '')}
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
               >
                 <option value="">— Select aircraft —</option>
@@ -289,7 +289,7 @@ export default function AircraftAvailabilityPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: any }) => updateAircraftAvailability(id, body),
+    mutationFn: ({ id, body }: { id: number; body: any }) => updateAircraftAvailability(id, body),
     onSuccess:  () => { qc.invalidateQueries({ queryKey: ['aircraft-availability'] }); setEditRecord(null); },
   });
 

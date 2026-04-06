@@ -1,7 +1,7 @@
 import { apiClient } from './client';
 
 export interface AircraftRecord {
-  id:              string;
+  id:              number;
   registration:    string;
   type:            string | null;
   model:           string | null;
@@ -23,7 +23,7 @@ export const getFleet = async (params: {
   return data;
 };
 
-export const getAircraftById = async (id: string): Promise<AircraftRecord> => {
+export const getAircraftById = async (id: number): Promise<AircraftRecord> => {
   const { data } = await apiClient.get(`/fleet/aircraft/${id}`);
   return data;
 };

@@ -17,6 +17,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { to: '/dashboard',    label: 'Dashboard',    icon: LayoutDashboard,  permission: 'dashboard:read' },
   { to: '/dispatch',     label: 'Dispatch',     icon: Plane,            permission: 'dispatch:read' },
+  { to: '/aircraft',              label: 'Aircraft',             icon: Plane,        permission: 'fleet:read' },
   { to: '/aircraft-availability', label: 'Aircraft Availability', icon: PlaneTakeoff, permission: 'aircraft_availability:read' },
   { to: '/roster',       label: 'Roster',       icon: CalendarDays,     permission: 'roster:read' },
   { to: '/students',     label: 'Students',     icon: BookUser,         permission: 'students:read' },

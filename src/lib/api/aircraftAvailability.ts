@@ -6,8 +6,8 @@ export type AvailStatus = 'AVAILABLE' | 'MAINTENANCE' | 'DEFECTED';
 export type TimeSlot    = 'ALL' | 'SLOT_1' | 'SLOT_2' | 'SLOT_3';
 
 export interface AircraftAvailabilityRecord {
-  id:          string;
-  aircraftId:  string;
+  id:          number;
+  aircraftId:  number;
   aircraftCode: string | null;
   aircraftType: string | null;
   availDate:   string;      // ISO date
@@ -29,7 +29,7 @@ export interface AircraftAvailabilityResponse {
 export const getAircraftAvailability = async (params: {
   from_date?:   string;
   to_date?:     string;
-  aircraft_id?: string;
+  aircraft_id?: number;
   status?:      AvailStatus;
 }): Promise<AircraftAvailabilityResponse> => {
   const { data } = await apiClient.get('/aircraft-availability/', { params });
@@ -37,7 +37,7 @@ export const getAircraftAvailability = async (params: {
 };
 
 export const createAircraftAvailability = async (body: {
-  aircraft_id: string;
+  aircraft_id: number;
   avail_date:  string;
   time_slot?:  TimeSlot;
   status:      AvailStatus;
@@ -48,13 +48,13 @@ export const createAircraftAvailability = async (body: {
 };
 
 export const updateAircraftAvailability = async (
-  id: string,
+  id: number,
   body: { status: AvailStatus; remarks?: string }
 ): Promise<AircraftAvailabilityRecord> => {
   const { data } = await apiClient.put(`/aircraft-availability/${id}`, body);
   return data;
 };
 
-export const deleteAircraftAvailability = async (id: string): Promise<void> => {
+export const deleteAircraftAvailability = async (id: number): Promise<void> => {
   await apiClient.delete(`/aircraft-availability/${id}`);
 };
