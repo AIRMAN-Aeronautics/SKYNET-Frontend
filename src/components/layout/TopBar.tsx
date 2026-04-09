@@ -5,20 +5,20 @@ export function TopBar() {
   const { user, logout } = useAuth();
 
   return (
-    <header className="flex h-16 items-center justify-between border-b bg-card px-6">
+    <header className="flex h-9 items-center justify-between border-b bg-card px-4">
       <div />
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-1">
         <button
-          className="relative rounded-full p-2 hover:bg-accent"
+          className="relative rounded-full p-1 hover:bg-accent"
           aria-label="Notifications"
         >
-          <Bell className="h-4 w-4" />
+          <Bell className="h-3.5 w-3.5" />
         </button>
         <button
           onClick={logout}
-          className="flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-accent"
+          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs hover:bg-accent"
         >
-          <LogOut className="h-4 w-4" />
+          <LogOut className="h-3.5 w-3.5" />
           <span>Logout</span>
         </button>
       </div>

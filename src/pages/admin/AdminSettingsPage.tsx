@@ -93,6 +93,64 @@ function StatusDot({ active }: { active: boolean }) {
   );
 }
 
+// ── Confirm Deactivate Dialog ────────────────────────────────────────────────
+
+function ConfirmDeactivateDialog({
+  open, name, entityType, action, onConfirm, onCancel, isPending,
+}: {
+  open: boolean;
+  name: string;
+  entityType: 'user' | 'instructor' | 'student';
+  action?: 'activate' | 'deactivate';
+  onConfirm: () => void;
+  onCancel: () => void;
+  isPending?: boolean;
+}) {
+  const label = entityType === 'instructor' ? 'Instructor' : entityType === 'student' ? 'Student' : 'User';
+  const isActivate = action === 'activate';
+  return (
+    <Dialog open={open} onOpenChange={v => !v && onCancel()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <div className={`flex h-8 w-8 items-center justify-center rounded-full shrink-0 ${isActivate ? 'bg-emerald-100' : 'bg-red-100'}`}>
+              <AlertTriangle className={`h-4 w-4 ${isActivate ? 'text-emerald-600' : 'text-red-600'}`} />
+            </div>
+            <span>{isActivate ? 'Activate' : 'Deactivate'} {label}</span>
+          </DialogTitle>
+        </DialogHeader>
+        <div className="py-1 space-y-2">
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to {isActivate ? 'activate' : 'deactivate'}{' '}
+            <span className="font-semibold text-foreground">{name}</span>?
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {isActivate
+              ? 'They will regain access immediately.'
+              : 'Their access will be revoked immediately. You can reactivate them at any time.'}
+          </p>
+        </div>
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="outline" onClick={onCancel} disabled={isPending}>
+            Cancel
+          </Button>
+          <Button
+            onClick={onConfirm}
+            disabled={isPending}
+            className={isActivate
+              ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-0'
+              : 'bg-red-600 hover:bg-red-700 text-white border-0'}
+          >
+            {isPending
+              ? (isActivate ? 'Activating…' : 'Deactivating…')
+              : (isActivate ? 'Activate' : 'Deactivate')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Theme helpers ────────────────────────────────────────────────────────────
 
 function useTheme() {
@@ -419,9 +477,14 @@ function UsersTab() {
     queryFn: getRoles,
   });
 
+  const [pendingAction, setPendingAction] = useState<{ user: AdminUser; action: 'activate' | 'deactivate' } | null>(null);
+
   const toggleActive = useMutation({
     mutationFn: (u: AdminUser) => u.isActive ? deactivateUser(u.id) : activateUser(u.id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-users'] });
+      setPendingAction(null);
+    },
   });
 
   const handleSearch = (v: string) => {
@@ -430,9 +493,17 @@ function UsersTab() {
     (handleSearch as any)._t = setTimeout(() => { setDebouncedSearch(v); setPage(1); }, 400);
   };
 
-  const totalPages = data ? Math.ceil(data.meta.total / 20) : 1;
+  // Exclude instructor-role users from the Users tab — they live in the Instructors tab.
+  // Checks roleLabel (set at creation) AND assigned role objects as a fallback.
+  const isInstructorUser = (u: AdminUser) =>
+    u.roleLabel?.toUpperCase() === 'INSTRUCTOR' ||
+    u.roles.some(r => r.slug === 'instructor' || r.name.toLowerCase() === 'instructor');
 
-  const activeCount = data?.data.filter(u => u.isActive).length ?? 0;
+  const displayUsers  = data?.data.filter(u => !isInstructorUser(u)) ?? [];
+  const nonInstructorRoles = roles.filter(r => r.slug !== 'instructor' && r.name.toLowerCase() !== 'instructor');
+
+  const totalPages = data ? Math.ceil(data.meta.total / 20) : 1;
+  const activeCount = displayUsers.filter(u => u.isActive).length;
 
   return (
     <div className="space-y-4">
@@ -477,9 +548,9 @@ function UsersTab() {
           <TableBody>
             {isLoading ? (
               <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-sm">Loading…</TableCell></TableRow>
-            ) : data?.data.length === 0 ? (
+            ) : displayUsers.length === 0 ? (
               <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-sm">No users found.</TableCell></TableRow>
-            ) : data?.data.map(user => (
+            ) : displayUsers.map(user => (
               <TableRow key={user.id}>
                 <TableCell className="py-2">
                   <p className="font-medium text-sm">{user.fullName}</p>
@@ -500,8 +571,10 @@ function UsersTab() {
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setAssignTarget(user)}>Roles</Button>
                     <Button
-                      variant="outline" size="sm" className={`h-7 text-xs ${user.isActive ? 'text-destructive hover:text-destructive' : 'text-emerald-600 hover:text-emerald-600'}`}
-                      onClick={() => toggleActive.mutate(user)} disabled={toggleActive.isPending}
+                      variant="outline" size="sm"
+                      className={`h-7 text-xs ${user.isActive ? 'text-destructive hover:text-destructive' : 'text-emerald-600 hover:text-emerald-600'}`}
+                      onClick={() => setPendingAction({ user, action: user.isActive ? 'deactivate' : 'activate' })}
+                      disabled={toggleActive.isPending}
                     >
                       {user.isActive ? 'Deactivate' : 'Activate'}
                     </Button>
@@ -528,16 +601,27 @@ function UsersTab() {
       <InviteDialog
         open={showInvite}
         onClose={() => setShowInvite(false)}
-        roles={roles}
+        roles={nonInstructorRoles}
         onSuccess={() => qc.invalidateQueries({ queryKey: ['admin-users'] })}
       />
       {assignTarget && (
         <AssignRolesDialog
           user={assignTarget}
-          roles={roles}
+          roles={nonInstructorRoles}
           open={!!assignTarget}
           onClose={() => setAssignTarget(null)}
           onSuccess={() => qc.invalidateQueries({ queryKey: ['admin-users'] })}
+        />
+      )}
+      {pendingAction && (
+        <ConfirmDeactivateDialog
+          open
+          name={pendingAction.user.fullName}
+          entityType="user"
+          action={pendingAction.action}
+          onConfirm={() => toggleActive.mutate(pendingAction.user)}
+          onCancel={() => setPendingAction(null)}
+          isPending={toggleActive.isPending}
         />
       )}
     </div>
@@ -837,6 +921,39 @@ function IntegerField({
   );
 }
 
+type SystemGroup = 'config' | 'notifications' | 'data';
+
+const SYSTEM_GROUPS: {
+  id: SystemGroup;
+  label: string;
+  subtitle: string;
+  icon: React.ElementType;
+  desc: string;
+  badge?: string;
+}[] = [
+  {
+    id: 'config',
+    label: 'Configuration',
+    subtitle: 'System Settings',
+    icon: Settings,
+    desc: 'Operational thresholds and scheduling limits',
+  },
+  {
+    id: 'notifications',
+    label: 'Notification',
+    subtitle: 'Preferences',
+    icon: Mail,
+    desc: 'Alert channels and trigger rules',
+  },
+  {
+    id: 'data',
+    label: 'Data',
+    subtitle: 'Management',
+    icon: Database,
+    desc: 'Backups, exports and API access',
+  },
+];
+
 function SystemTab() {
   const qc = useQueryClient();
 
@@ -845,10 +962,14 @@ function SystemTab() {
     queryFn: getSettings,
   });
 
+  const [activeGroup, setActiveGroup] = useState<SystemGroup>('config');
+
   // ── System settings state ─────────────────────────────────────────────────
   const [studentsPerInstructor, setStudentsPerInstructor] = useState(10);
   const [soloMilestoneHours, setSoloMilestoneHours] = useState(25);
   const [instructorHoursPerDay, setInstructorHoursPerDay] = useState(6);
+  const [soloHoursPerRide, setSoloHoursPerRide] = useState(1);
+  const [dualHoursPerRide, setDualHoursPerRide] = useState(2);
 
   // ── Notification preferences state ────────────────────────────────────────
   const [emailNotifs, setEmailNotifs] = useState(true);
@@ -860,11 +981,12 @@ function SystemTab() {
 
   const [synced, setSynced] = useState(false);
 
-  // Sync local state once API data arrives (runs once per fetch)
   if (settings && !synced) {
     setStudentsPerInstructor(settings.system_settings.student_per_instructor);
     setSoloMilestoneHours(settings.system_settings.solo_flight_milestone_hours);
     setInstructorHoursPerDay(settings.system_settings.instructor_flying_hours_per_day);
+    setSoloHoursPerRide(settings.system_settings.solo_hours_per_ride ?? 1);
+    setDualHoursPerRide(settings.system_settings.dual_hours_per_ride ?? 2);
     setEmailNotifs(settings.notification_preferences.emailNotifications);
     setMaintenanceAlerts(settings.notification_preferences.maintenanceAlerts);
     setComplianceWarnings(settings.notification_preferences.complianceWarnings);
@@ -881,15 +1003,15 @@ function SystemTab() {
           student_per_instructor: studentsPerInstructor,
           solo_flight_milestone_hours: soloMilestoneHours,
           instructor_flying_hours_per_day: instructorHoursPerDay,
+          solo_hours_per_ride: soloHoursPerRide,
+          dual_hours_per_ride: dualHoursPerRide,
         },
         notification_preferences: {
           emailNotifications: emailNotifs,
           maintenanceAlerts,
           complianceWarnings,
         },
-        data_management: {
-          autoBackup,
-        },
+        data_management: { autoBackup },
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-settings'] });
@@ -899,9 +1021,12 @@ function SystemTab() {
   });
 
   const busy = isLoading || saveMutation.isPending;
+  const active = SYSTEM_GROUPS.find(g => g.id === activeGroup)!;
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-sm">
+
+      {/* ── Dark aviation header ─────────────────────────────────────────── */}
       <AviationHeader
         category="Configuration"
         title="System Settings"
@@ -925,83 +1050,145 @@ function SystemTab() {
         }
       />
 
-      {/* ── Configuration System Settings ─────────────────────────────────── */}
-      <div className="rounded-lg border overflow-hidden">
-        <div className="bg-muted/40 px-4 py-2 border-b">
-          <SectionLabel>Configuration System Settings</SectionLabel>
-        </div>
-        <div className="divide-y">
-          <IntegerField
-            label="Students per Instructor"
-            desc="Maximum number of students that can be assigned to one instructor"
-            value={studentsPerInstructor}
-            onChange={setStudentsPerInstructor}
-            disabled={busy}
-          />
-          <IntegerField
-            label="Solo Flight Milestone (hours)"
-            desc="Minimum flight hours a student must log before solo flight is permitted"
-            value={soloMilestoneHours}
-            onChange={setSoloMilestoneHours}
-            disabled={busy}
-          />
-          <IntegerField
-            label="Instructor Flying Hours per Day"
-            desc="Maximum flying hours an instructor is scheduled for in a single day"
-            value={instructorHoursPerDay}
-            onChange={setInstructorHoursPerDay}
-            disabled={busy}
-          />
-        </div>
-      </div>
+      {/* ── Master-Detail split ──────────────────────────────────────────── */}
+      <div className="flex gap-4 p-4 min-h-[520px]">
 
-      {/* ── Notification Preferences ──────────────────────────────────────── */}
-      <div className="rounded-lg border overflow-hidden">
-        <div className="bg-muted/40 px-4 py-2 border-b">
-          <SectionLabel>Notification Preferences</SectionLabel>
+        {/* LEFT: group navigation */}
+        <div className="w-60 shrink-0 flex flex-col gap-2">
+          {SYSTEM_GROUPS.map(g => {
+            const isActive = g.id === activeGroup;
+            return (
+              <button
+                key={g.id}
+                onClick={() => setActiveGroup(g.id)}
+                className={`w-full text-left rounded-xl border transition-all duration-150 p-4
+                  ${isActive
+                    ? 'bg-white border-blue-200 border-l-4 border-l-blue-600 shadow-md'
+                    : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'
+                  }`}
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <div className={`rounded-lg p-2 shrink-0 ${isActive ? 'bg-blue-50' : 'bg-slate-50'}`}>
+                    <g.icon className={`w-4 h-4 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className={`text-sm font-semibold leading-tight truncate ${isActive ? 'text-slate-900' : 'text-slate-700'}`}>
+                      {g.label}
+                    </p>
+                    <p className={`text-xs leading-tight mt-0.5 ${isActive ? 'text-blue-500' : 'text-slate-400'}`}>
+                      {g.subtitle}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">{g.desc}</p>
+              </button>
+            );
+          })}
         </div>
-        {[
-          { label: 'Email Notifications', desc: 'Send email alerts for critical events',          checked: emailNotifs,        onChange: setEmailNotifs        },
-          { label: 'Maintenance Alerts',  desc: 'Alert when aircraft require maintenance',         checked: maintenanceAlerts,  onChange: setMaintenanceAlerts  },
-          { label: 'Compliance Warnings', desc: 'Warn 30 days before compliance items expire',    checked: complianceWarnings, onChange: setComplianceWarnings },
-        ].map((row, i, arr) => (
-          <div key={row.label} className={`flex items-center justify-between px-4 py-3 ${i < arr.length - 1 ? 'border-b' : ''}`}>
-            <div>
-              <p className="text-sm font-medium">{row.label}</p>
-              <p className="text-xs text-muted-foreground">{row.desc}</p>
-            </div>
-            <Switch checked={row.checked} onCheckedChange={row.onChange} disabled={busy} />
-          </div>
-        ))}
-      </div>
 
-      {/* ── Data Management ───────────────────────────────────────────────── */}
-      <div className="rounded-lg border overflow-hidden">
-        <div className="bg-muted/40 px-4 py-2 border-b">
-          <SectionLabel>Data Management</SectionLabel>
-        </div>
-        <div className="divide-y">
-          <div className="flex items-center justify-between px-4 py-3">
-            <div>
-              <p className="text-sm font-medium">Automatic Backup</p>
-              <p className="text-xs text-muted-foreground">Automatically back up organisation data daily</p>
-            </div>
-            <Switch checked={autoBackup} onCheckedChange={setAutoBackup} disabled={busy} />
+        {/* RIGHT: detail panel */}
+        <div className="flex-1 overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50 flex flex-col">
+
+          {/* Panel header */}
+          <div className="shrink-0 px-6 py-4 border-b border-slate-100 bg-white">
+            <p className="text-[10px] font-bold tracking-[0.18em] text-slate-400 uppercase mb-0.5">
+              {active.label}
+            </p>
+            <h2 className="text-base font-bold text-slate-900">{active.subtitle}</h2>
+            <p className="text-xs text-slate-500 mt-0.5">{active.desc}</p>
           </div>
-          <div className="flex items-center justify-between px-4 py-3">
-            <div>
-              <p className="text-sm font-medium">Data Export</p>
-              <p className="text-xs text-muted-foreground">Export your organisation's data as CSV or JSON</p>
+
+          {/* ── Config panel ────────────────────────────────────────────── */}
+          {activeGroup === 'config' && (
+            <div className="flex-1 divide-y divide-slate-100">
+              <IntegerField
+                label="Students per Instructor"
+                desc="Maximum number of students that can be assigned to one instructor"
+                value={studentsPerInstructor}
+                onChange={setStudentsPerInstructor}
+                disabled={busy}
+              />
+              <IntegerField
+                label="Solo Flight Milestone (hours)"
+                desc="Minimum flight hours a student must log before solo flight is permitted"
+                value={soloMilestoneHours}
+                onChange={setSoloMilestoneHours}
+                disabled={busy}
+              />
+              <IntegerField
+                label="Instructor Flying Hours per Day"
+                desc="Maximum flying hours an instructor is scheduled for in a single day"
+                value={instructorHoursPerDay}
+                onChange={setInstructorHoursPerDay}
+                disabled={busy}
+              />
+              <IntegerField
+                label="Flying Hours — Solo per Ride"
+                desc="Standard flight duration (hours) counted for a solo sortie"
+                value={soloHoursPerRide}
+                onChange={setSoloHoursPerRide}
+                disabled={busy}
+              />
+              <IntegerField
+                label="Flying Hours — Dual per Ride"
+                desc="Standard flight duration (hours) counted for a dual (instructor + student) sortie"
+                value={dualHoursPerRide}
+                onChange={setDualHoursPerRide}
+                disabled={busy}
+              />
             </div>
-            <Button variant="outline" size="sm" className="h-7 text-xs">Export Data</Button>
-          </div>
-          <div className="flex items-center justify-between px-4 py-3">
-            <div>
-              <p className="text-sm font-medium">API Access</p>
-              <p className="text-xs text-muted-foreground">Generate API keys for external integrations</p>
+          )}
+
+          {/* ── Notifications panel ─────────────────────────────────────── */}
+          {activeGroup === 'notifications' && (
+            <div className="flex-1 divide-y divide-slate-100">
+              {[
+                { label: 'Email Notifications', desc: 'Send email alerts for critical events',       checked: emailNotifs,        onChange: setEmailNotifs        },
+                { label: 'Maintenance Alerts',  desc: 'Alert when aircraft require maintenance',      checked: maintenanceAlerts,  onChange: setMaintenanceAlerts  },
+                { label: 'Compliance Warnings', desc: 'Warn 30 days before compliance items expire', checked: complianceWarnings, onChange: setComplianceWarnings },
+              ].map(row => (
+                <div key={row.label} className="flex items-center justify-between px-6 py-4">
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">{row.label}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{row.desc}</p>
+                  </div>
+                  <Switch checked={row.checked} onCheckedChange={row.onChange} disabled={busy} />
+                </div>
+              ))}
             </div>
-            <Button variant="outline" size="sm" className="h-7 text-xs">Generate API Key</Button>
-          </div>
+          )}
+
+          {/* ── Data management panel ───────────────────────────────────── */}
+          {activeGroup === 'data' && (
+            <div className="flex-1 divide-y divide-slate-100">
+              <div className="flex items-center justify-between px-6 py-4">
+                <div>
+                  <p className="text-sm font-medium text-slate-900">Automatic Backup</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Automatically back up organisation data daily</p>
+                </div>
+                <Switch checked={autoBackup} onCheckedChange={setAutoBackup} disabled={busy} />
+              </div>
+              <div className="flex items-center justify-between px-6 py-4">
+                <div>
+                  <p className="text-sm font-medium text-slate-900">Data Export</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Export your organisation's data as CSV or JSON</p>
+                </div>
+                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
+                  <Download className="h-3.5 w-3.5" /> Export Data
+                </Button>
+              </div>
+              <div className="flex items-center justify-between px-6 py-4">
+                <div>
+                  <p className="text-sm font-medium text-slate-900">API Access</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Generate API keys for external integrations</p>
+                </div>
+                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
+                  <Globe className="h-3.5 w-3.5" /> Generate API Key
+                </Button>
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
     </div>
@@ -1525,10 +1712,12 @@ function StudentManagementTab() {
     qc.invalidateQueries({ queryKey: ['admin-students-all'] });
   };
 
+  const [pendingAction, setPendingAction] = useState<{ student: StudentRecord; action: 'activate' | 'deactivate' } | null>(null);
+
   const toggleStatus = useMutation({
     mutationFn: (s: StudentRecord) =>
       s.status === 'active' ? deactivateStudent(s.id) : activateStudent(s.id),
-    onSuccess: invalidate,
+    onSuccess: () => { invalidate(); setPendingAction(null); },
   });
 
   return (
@@ -1658,8 +1847,10 @@ function StudentManagementTab() {
                 </TableCell>
                 <TableCell className="py-2 text-right">
                   <Button
-                    variant="outline" size="sm" className={`h-7 text-xs ${s.status === 'active' ? 'text-destructive hover:text-destructive' : 'text-emerald-600 hover:text-emerald-600'}`}
-                    onClick={() => toggleStatus.mutate(s)} disabled={toggleStatus.isPending}
+                    variant="outline" size="sm"
+                    className={`h-7 text-xs ${s.status === 'active' ? 'text-destructive hover:text-destructive' : 'text-emerald-600 hover:text-emerald-600'}`}
+                    onClick={() => setPendingAction({ student: s, action: s.status === 'active' ? 'deactivate' : 'activate' })}
+                    disabled={toggleStatus.isPending}
                   >
                     {s.status === 'active' ? 'Deactivate' : 'Activate'}
                   </Button>
@@ -1680,6 +1871,17 @@ function StudentManagementTab() {
         onClose={() => setShowBulk(false)}
         onUploaded={invalidate}
       />
+      {pendingAction && (
+        <ConfirmDeactivateDialog
+          open
+          name={pendingAction.student.fullName}
+          entityType="student"
+          action={pendingAction.action}
+          onConfirm={() => toggleStatus.mutate(pendingAction.student)}
+          onCancel={() => setPendingAction(null)}
+          isPending={toggleStatus.isPending}
+        />
+      )}
     </div>
   );
 }
@@ -1888,10 +2090,12 @@ function InstructorsTab() {
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['admin-instructors'] });
 
+  const [pendingAction, setPendingAction] = useState<{ instructor: InstructorRecord; action: 'activate' | 'deactivate' } | null>(null);
+
   const toggleStatus = useMutation({
     mutationFn: (i: InstructorRecord) =>
       i.status === 'active' ? deactivateInstructor(i.id) : activateInstructor(i.id),
-    onSuccess: invalidate,
+    onSuccess: () => { invalidate(); setPendingAction(null); },
   });
 
   const totalInactive = allInstructors.length - totalActive;
@@ -2019,7 +2223,7 @@ function InstructorsTab() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => toggleStatus.mutate(inst)}
+                    onClick={() => setPendingAction({ instructor: inst, action: inst.status === 'active' ? 'deactivate' : 'activate' })}
                     disabled={toggleStatus.isPending}
                     className={`h-7 text-xs ${inst.status === 'active'
                       ? 'text-destructive hover:text-destructive border-destructive/30 hover:border-destructive/50'
@@ -2039,6 +2243,17 @@ function InstructorsTab() {
         onClose={() => setShowCreate(false)}
         onCreated={invalidate}
       />
+      {pendingAction && (
+        <ConfirmDeactivateDialog
+          open
+          name={pendingAction.instructor.fullName}
+          entityType="instructor"
+          action={pendingAction.action}
+          onConfirm={() => toggleStatus.mutate(pendingAction.instructor)}
+          onCancel={() => setPendingAction(null)}
+          isPending={toggleStatus.isPending}
+        />
+      )}
     </div>
   );
 }
@@ -2531,7 +2746,7 @@ export default function AdminSettingsPage() {
           </TabsContent>
         )}
 
-        <TabsContent value="system">
+        <TabsContent value="system" className="mt-0">
           <SystemTab />
         </TabsContent>
 

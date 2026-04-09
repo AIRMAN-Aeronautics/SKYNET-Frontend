@@ -250,6 +250,8 @@ export interface SystemSettings {
   student_per_instructor: number;
   solo_flight_milestone_hours: number;
   instructor_flying_hours_per_day: number;
+  solo_hours_per_ride: number;
+  dual_hours_per_ride: number;
 }
 
 export interface NotificationPreferences {
