@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -2288,23 +2288,26 @@ function InstructorMappingTab() {
   });
 
   const [pending, setPending] = useState<Record<string, string>>({});
-  const [synced, setSynced] = useState(false);
-  if (!synced && !mappingLoading && Object.keys(savedMappings).length >= 0) {
-    setPending({ ...savedMappings });
-    setSynced(true);
-  }
+  const [dirty, setDirty] = useState(false);
+
+  // Sync from server whenever savedMappings changes, but only when no local edits are pending
+  useEffect(() => {
+    if (!dirty) {
+      setPending({ ...savedMappings });
+    }
+  }, [savedMappings, dirty]);
 
   const saveMutation = useMutation({
     mutationFn: () => saveMapping(pending),
     onSuccess: () => {
+      setDirty(false);
       qc.invalidateQueries({ queryKey: ['admin-mapping'] });
-      setSynced(false);
     },
   });
 
   const students        = studentsData?.data ?? [];
   const activeInstructors = instructorsData.filter(i => i.status === 'active');
-  const hasChanges      = JSON.stringify(pending) !== JSON.stringify(savedMappings);
+  const hasChanges      = dirty;
   const totalAssigned   = Object.values(pending).filter(Boolean).length;
 
   // Trainee counts keyed by instructor userId
@@ -2332,10 +2335,13 @@ function InstructorMappingTab() {
 
   const assign   = (profileId: string) => {
     if (!selectedUserId || isFull) return;
+    setDirty(true);
     setPending(p => ({ ...p, [profileId]: selectedUserId }));
   };
-  const unassign = (profileId: string) =>
+  const unassign = (profileId: string) => {
+    setDirty(true);
     setPending(p => { const { [profileId]: _, ...rest } = p; return rest; });
+  };
 
   // ── render ────────────────────────────────────────────────────────────────
 
@@ -2379,7 +2385,7 @@ function InstructorMappingTab() {
                   variant="outline"
                   size="sm"
                   className="text-xs border-blue-700 text-blue-200 hover:bg-blue-900 hover:text-white"
-                  onClick={() => setPending({ ...savedMappings })}
+                  onClick={() => { setPending({ ...savedMappings }); setDirty(false); }}
                 >
                   Discard
                 </Button>
